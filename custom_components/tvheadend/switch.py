@@ -5,38 +5,32 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.switch import SwitchEntity
 
-from . import CONF_SWITCHES, DATA_TVH, SIGNAL_UPDATE_TVH
+from .const import DOMAIN, SIGNAL_UPDATE_TVH
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_platform(hass, config, async_add_entities,
-                               discovery_info=None):
-    """Set up the TVHeadend switches."""
-    if discovery_info is None:
-        return
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up the TVHeadend switches from a config entry."""
+    tvh = hass.data[DOMAIN][entry.entry_id]['tvh']
 
-    name = 'tvheadend'
-    switches = discovery_info[CONF_SWITCHES]
-    tvh = hass.data[DATA_TVH]
+    switches = [
+        TVHSwitch(entry.entry_id, index, stream)
+        for index, stream in enumerate(tvh.stream_list)
+    ]
 
-    all_switches = []
-
-    for index, switch in enumerate(switches):
-        sname = '{}_{}'.format(name, index)
-        all_switches.append(TVHSwitch(sname, tvh.stream_list[index]))
-
-    async_add_entities(all_switches, True)
+    async_add_entities(switches, True)
 
 
 class TVHSwitch(SwitchEntity):
     """Representation of a TVH switch."""
 
-    def __init__(self, name, stream):
+    def __init__(self, entry_id, index, stream):
         """Initialize a TVH switch."""
         self._stream = stream
-        self._name = name
-        _LOGGER.debug('Setup new stream switch: %s', name)
+        self._index = index
+        self._attr_unique_id = '{}_switch_{}'.format(entry_id, index)
+        _LOGGER.debug('Setup new stream switch: %s', self._attr_unique_id)
 
     async def async_added_to_hass(self):
         """Register update dispatcher."""
@@ -51,8 +45,7 @@ class TVHSwitch(SwitchEntity):
     @property
     def name(self):
         """Return the name."""
-        index = self._name.split('_')[1]
-        return 'TV Stream #{}'.format(index)
+        return 'TV Stream #{}'.format(self._index)
 
     @property
     def is_on(self):

@@ -8,17 +8,25 @@ Licensed under the MIT license.
 """
 
 import asyncio
+import hashlib
 import logging
+import os
+import re
 
 import aiohttp
+from yarl import URL
 
 from .stream import Stream
 from .constants import (
     DEFAULT_TIMEOUT, DEFAULT_HEADERS, DEFAULT_PORT,
-    SUBSCRIPTIONS_URL, CHANNELS_URL, SERVICES_URL,
+    SUBSCRIPTIONS_URL, CHANNELS_URL, SERVICES_URL, SERVERINFO_URL,
     __version__)
 
 _LOGGER = logging.getLogger(__name__)
+
+INVALID_AUTH = "invalid_auth"
+
+_DIGEST_FIELD = re.compile(r'(\w+)=(?:"([^"]*)"|([^,]+))')
 
 
 class TVHeadend(object):
@@ -48,6 +56,11 @@ class TVHeadend(object):
         self._active_subscriptions = []
 
         self._ext_list = [Stream(self) for _ in range(int(maxconn))]
+
+        # Authentication state
+        self._basic_auth = None
+        self._digest = None
+        self._nc = 0
 
         self._api_session = aiohttp.ClientSession(headers=DEFAULT_HEADERS)
 
@@ -96,6 +109,133 @@ class TVHeadend(object):
         _LOGGER.debug('Closing tvheadend session.')
         await self._api_session.close()
 
+    # -- Authentication -----------------------------------------------------
+
+    def _parse_digest_challenge(self, header):
+        """Parse a WWW-Authenticate digest challenge into a dict."""
+        header = header.split(' ', 1)[1] if ' ' in header else header
+        params = {}
+        for match in _DIGEST_FIELD.finditer(header):
+            value = match.group(2) if match.group(2) is not None \
+                else match.group(3)
+            params[match.group(1)] = value
+        self._digest = params
+        self._nc = 0
+
+    def _digest_header(self, method, uri):
+        """Build a digest Authorization header for the given request."""
+        params = self._digest
+        realm = params.get('realm', '')
+        nonce = params.get('nonce', '')
+        qop = params.get('qop')
+        opaque = params.get('opaque')
+        algorithm = params.get('algorithm', 'MD5')
+
+        self._nc += 1
+        nc_value = '{:08x}'.format(self._nc)
+        cnonce = hashlib.md5(os.urandom(8)).hexdigest()[:16]
+
+        ha1 = hashlib.md5(
+            '{}:{}:{}'.format(self.usr, realm, self.pwd or '').encode()
+        ).hexdigest()
+        ha2 = hashlib.md5('{}:{}'.format(method, uri).encode()).hexdigest()
+
+        if qop:
+            qop = 'auth'
+            response = hashlib.md5('{}:{}:{}:{}:{}:{}'.format(
+                ha1, nonce, nc_value, cnonce, qop, ha2).encode()).hexdigest()
+        else:
+            response = hashlib.md5(
+                '{}:{}:{}'.format(ha1, nonce, ha2).encode()).hexdigest()
+
+        parts = [
+            'username="{}"'.format(self.usr),
+            'realm="{}"'.format(realm),
+            'nonce="{}"'.format(nonce),
+            'uri="{}"'.format(uri),
+            'response="{}"'.format(response),
+            'algorithm={}'.format(algorithm),
+        ]
+        if qop:
+            parts += [
+                'qop={}'.format(qop),
+                'nc={}'.format(nc_value),
+                'cnonce="{}"'.format(cnonce),
+            ]
+        if opaque:
+            parts.append('opaque="{}"'.format(opaque))
+
+        return 'Digest ' + ', '.join(parts)
+
+    async def _request(self, method, url, params=None, data=None):
+        """Make a request, transparently handling basic/digest auth.
+
+        Returns the aiohttp response object, or None on a connection error.
+        """
+        full = URL(url)
+        if params:
+            full = full.with_query(params)
+        uri = full.raw_path_qs
+
+        headers = dict(DEFAULT_HEADERS)
+        if self._digest and self.usr:
+            headers['Authorization'] = self._digest_header(method, uri)
+
+        try:
+            async with asyncio.timeout(DEFAULT_TIMEOUT):
+                resp = await self._api_session.request(
+                    method, str(full), data=data, headers=headers,
+                    auth=self._basic_auth)
+
+            if resp.status == 401 and self.usr:
+                challenge = resp.headers.get('WWW-Authenticate', '')
+                await resp.read()
+
+                if challenge.lower().startswith('digest'):
+                    self._parse_digest_challenge(challenge)
+                    headers['Authorization'] = self._digest_header(method, uri)
+                    async with asyncio.timeout(DEFAULT_TIMEOUT):
+                        resp = await self._api_session.request(
+                            method, str(full), data=data, headers=headers)
+                elif challenge.lower().startswith('basic'):
+                    self._basic_auth = aiohttp.BasicAuth(
+                        self.usr, self.pwd or '')
+                    async with asyncio.timeout(DEFAULT_TIMEOUT):
+                        resp = await self._api_session.request(
+                            method, str(full), data=data,
+                            headers=dict(DEFAULT_HEADERS),
+                            auth=self._basic_auth)
+
+            return resp
+
+        except (aiohttp.ClientError, asyncio.TimeoutError,
+                ConnectionRefusedError) as err:
+            _LOGGER.error('Error during %s request. %s', method, err)
+            return None
+
+    async def verify_connection(self):
+        """Check connectivity and credentials against the server.
+
+        Returns the server info dict on success, the string "invalid_auth"
+        on a rejected login, or None if the server is unreachable.
+        """
+        resp = await self._request('GET', self.root_url + SERVERINFO_URL)
+        if resp is None:
+            return None
+        if resp.status == 401:
+            return INVALID_AUTH
+        if resp.status != 200:
+            _LOGGER.error('Unexpected status verifying connection: %s',
+                          resp.status)
+            return None
+        try:
+            return await resp.json(content_type=None)
+        except (aiohttp.ClientError, ValueError) as err:
+            _LOGGER.error('Error parsing server info. %s', err)
+            return None
+
+    # -- API helpers --------------------------------------------------------
+
     async def fetch_subscription_list(self, force=False):
         """Fetch list of active stream subscriptions."""
         streams = []
@@ -136,7 +276,8 @@ class TVHeadend(object):
             active_streams.append(stream_name)
 
             if stream_name not in self._streams:
-                _LOGGER.debug('New stream: %s. Adding to stream list.', stream_name)
+                _LOGGER.debug('New stream: %s. Adding to stream list.',
+                              stream_name)
                 index = self.next_index()
                 self._streams[stream_name] = index
 
@@ -148,7 +289,8 @@ class TVHeadend(object):
         try:
             for stream, index in tmp_strm.items():
                 if stream not in active_streams:
-                    _LOGGER.debug('Old stream: %s. Removing from stream dict.', stream)
+                    _LOGGER.debug('Old stream: %s. Removing from stream dict.',
+                                  stream)
                     del self._streams[stream]
                     self._ext_list[index].update_data()
         except Exception as err:
@@ -181,59 +323,28 @@ class TVHeadend(object):
             if chan['name'] == channel_name:
                 return chan['services']
 
-    async def api_post(self, url, params=None, data=None):
-        """Make api post request."""
-        try:
-            async with asyncio.timeout(DEFAULT_TIMEOUT):
-                post = await self._api_session.post(
-                    url, params=params, data=data)
-            if post.status != 200:
-                _LOGGER.error('Error posting data: %s', post.status)
-                return None
-
-            if 'text/x-json' in post.headers.get('content-type', ''):
-                return await post.json(content_type='text/x-json')
-            return await post.text()
-
-        except (aiohttp.ClientError, asyncio.TimeoutError,
-                ConnectionRefusedError) as err:
-            _LOGGER.error('Error posting data. %s', err)
+    async def _api_call(self, method, url, params=None, data=None):
+        """Make an api call and return the decoded body, or None on error."""
+        resp = await self._request(method, url, params=params, data=data)
+        if resp is None:
             return None
+        if resp.status != 200:
+            _LOGGER.error('Error on %s %s: %s', method, url, resp.status)
+            return None
+        try:
+            return await resp.json(content_type=None)
+        except (aiohttp.ClientError, ValueError):
+            _LOGGER.debug('Response was not JSON, returning text.')
+            return await resp.text()
 
     async def api_get(self, url, params=None):
         """Make api fetch request."""
-        try:
-            async with asyncio.timeout(DEFAULT_TIMEOUT):
-                request = await self._api_session.get(
-                    url, headers=DEFAULT_HEADERS, params=params)
-            if request.status != 200:
-                _LOGGER.error('Error fetching data: %s', request.status)
-                return None
+        return await self._api_call('GET', url, params=params)
 
-            if 'text/x-json' in request.headers.get('content-type', ''):
-                return await request.json(content_type='text/x-json')
-            return await request.text()
-
-        except (aiohttp.ClientError, asyncio.TimeoutError,
-                ConnectionRefusedError) as err:
-            _LOGGER.error('Error fetching data. %s', err)
-            return None
+    async def api_post(self, url, params=None, data=None):
+        """Make api post request."""
+        return await self._api_call('POST', url, params=params, data=data)
 
     async def api_put(self, url, data=None):
         """Make api put request."""
-        try:
-            async with asyncio.timeout(DEFAULT_TIMEOUT):
-                put = await self._api_session.put(
-                    url, headers=DEFAULT_HEADERS, data=data)
-            if put.status != 200:
-                _LOGGER.error('Error putting data: %s', put.status)
-                return None
-
-            if 'text/x-json' in put.headers.get('content-type', ''):
-                return await put.json(content_type='text/x-json')
-            return await put.text()
-
-        except (aiohttp.ClientError, asyncio.TimeoutError,
-                ConnectionRefusedError) as err:
-            _LOGGER.error('Error putting data. %s', err)
-            return None
+        return await self._api_call('PUT', url, data=data)

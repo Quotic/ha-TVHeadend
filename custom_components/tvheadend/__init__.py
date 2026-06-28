@@ -1,122 +1,101 @@
 """Support for TVHeadend."""
 import logging
-from datetime import timedelta
 
 import voluptuous as vol
 
-from homeassistant.core import callback
 from homeassistant.const import (
-    CONF_HOST, CONF_PORT, CONF_USERNAME, CONF_PASSWORD,
-    EVENT_HOMEASSISTANT_STOP)
-from homeassistant.helpers import discovery
+    CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME)
+from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.util.dt import utcnow
+from homeassistant.helpers.event import async_track_time_interval
+
+from .const import (
+    ATTR_TARGET_INDEX, ATTR_TARGET_SERVICE, CONF_MAXCONN, DEFAULT_MAXCONN,
+    DOMAIN, PLATFORMS, SERVICE_SERVICE_SWITCH, SIGNAL_UPDATE_TVH,
+    TVH_SCAN_INTERVAL)
+from .pytvheadend.tvheadend import TVHeadend
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_MAXCONN = 'maxconn'
-CONF_SENSORS = 'sensors'
-CONF_SWITCHES = 'switches'
-
-DATA_TVH = 'tvheadend'
-DOMAIN = 'tvheadend'
-
-TVH_SCAN_INTERVAL = timedelta(seconds=30)
-
-SIGNAL_UPDATE_TVH = 'tvh_update'
-
-SERVICE_SERVICE_SWITCH = 'service_switch'
-
-ATTR_TARGET_INDEX = 'index'
-ATTR_TARGET_SERVICE = 'target'
-
 SERVICE_TVH_SCHEMA = vol.Schema({
-    ATTR_TARGET_INDEX: cv.string,
-    ATTR_TARGET_SERVICE: cv.string,
+    vol.Required(ATTR_TARGET_INDEX): cv.string,
+    vol.Required(ATTR_TARGET_SERVICE): cv.string,
 })
 
-CONFIG_SCHEMA = vol.Schema({
-    DOMAIN: vol.Schema({
-        vol.Required(CONF_HOST): cv.string,
-        vol.Required(CONF_PORT): cv.port,
-        vol.Required(CONF_MAXCONN): cv.string,
-        vol.Optional(CONF_USERNAME): cv.string,
-        vol.Optional(CONF_PASSWORD): cv.string,
-    }),
-}, extra=vol.ALLOW_EXTRA)
 
+async def async_setup_entry(hass, entry):
+    """Set up TVHeadend from a config entry."""
+    host = entry.data[CONF_HOST]
+    port = entry.data[CONF_PORT]
+    username = entry.data.get(CONF_USERNAME) or None
+    password = entry.data.get(CONF_PASSWORD) or None
+    maxconn = entry.options.get(
+        CONF_MAXCONN, entry.data.get(CONF_MAXCONN, DEFAULT_MAXCONN))
 
-async def async_setup(hass, config):
-    """Set up the TVHeadend component."""
-    from .pytvheadend.tvheadend import TVHeadend
+    tvh = TVHeadend(host, port, usr=username, pwd=password, maxconn=maxconn)
 
-    conf = config.get(DOMAIN)
-    host = conf.get(CONF_HOST)
-    port = conf.get(CONF_PORT)
-    maxconn = conf.get(CONF_MAXCONN)
-
-    tvh = TVHeadend(host, port, maxconn=maxconn)
-
-    hass.data[DATA_TVH] = tvh
-
-    success = await tvh.start()
-    if not success:
+    if not await tvh.start():
+        await tvh.stop()
         return False
 
-    async def async_update_tvh_data(now):
-        """Update data from tvh in TVH_SCAN_INTERVAL."""
+    async def async_update_tvh_data(now=None):
+        """Refresh the active subscription list and notify entities."""
         await tvh.fetch_subscription_list()
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
-        async_track_point_in_utc_time(
-            hass, async_update_tvh_data, utcnow() + TVH_SCAN_INTERVAL)
-
     @callback
     def force_update_tvh_data(msg):
-        """Force update of all data."""
-        _LOGGER.debug('TVHeadend Force Update Callback fired.')
+        """Force update of all entities."""
+        _LOGGER.debug('TVHeadend force update callback fired.')
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
-    await async_update_tvh_data(None)
+    await async_update_tvh_data()
     tvh.add_update_callback(force_update_tvh_data)
 
-    sensors = []
-    switches = []
-    if tvh.stream_list:
-        for index, stream in enumerate(tvh.stream_list):
-            obj_id = 'tvheadend_stream_{}'.format(index)
-            sensors.append(obj_id)
-            switches.append(obj_id)
-    else:
-        return False
+    unsub = async_track_time_interval(
+        hass, async_update_tvh_data, TVH_SCAN_INTERVAL)
 
-    hass.async_create_task(discovery.async_load_platform(
-        hass, 'sensor', DOMAIN, {
-            CONF_SENSORS: sensors,
-        }, config))
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        'tvh': tvh,
+        'unsub': unsub,
+    }
 
-    hass.async_create_task(discovery.async_load_platform(
-        hass, 'switch', DOMAIN, {
-            CONF_SWITCHES: switches,
-        }, config))
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    async def async_service_handler(service):
-        """Handle tvh service calls."""
-        params = service.data.copy()
-        index = int(params.pop(ATTR_TARGET_INDEX, None))
-        target = params.pop(ATTR_TARGET_SERVICE, None)
-        await tvh.stream_list[index].change_service(target.upper())
+    if not hass.services.has_service(DOMAIN, SERVICE_SERVICE_SWITCH):
+        async def async_service_handler(service):
+            """Handle tvh service calls."""
+            index = int(service.data[ATTR_TARGET_INDEX])
+            target = service.data[ATTR_TARGET_SERVICE]
+            data = next(iter(hass.data[DOMAIN].values()))
+            await data['tvh'].stream_list[index].change_service(target.upper())
 
-    hass.services.async_register(
-        DOMAIN, SERVICE_SERVICE_SWITCH, async_service_handler,
-        schema=SERVICE_TVH_SCHEMA)
+        hass.services.async_register(
+            DOMAIN, SERVICE_SERVICE_SWITCH, async_service_handler,
+            schema=SERVICE_TVH_SCHEMA)
 
-    async def stop_tvh(event):
-        """Handle stopping tvh api session."""
-        await tvh.stop()
-
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, stop_tvh)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
+
+
+async def _async_update_listener(hass, entry):
+    """Reload the entry when its options change (e.g. stream slot count)."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_unload_entry(hass, entry):
+    """Unload a TVHeadend config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, PLATFORMS)
+
+    if unload_ok:
+        data = hass.data[DOMAIN].pop(entry.entry_id)
+        data['unsub']()
+        await data['tvh'].stop()
+
+        if not hass.data[DOMAIN]:
+            hass.services.async_remove(DOMAIN, SERVICE_SERVICE_SWITCH)
+
+    return unload_ok

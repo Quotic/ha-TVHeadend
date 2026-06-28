@@ -1,0 +1,56 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Connect to TVHeadend",
+        "description": "Enter the details of your TVHeadend server. Leave the username and password blank for anonymous access.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "maxconn": "Stream slots"
+        },
+        "data_description": {
+          "maxconn": "How many concurrent stream entities to expose. You can change this later in the integration options."
+        }
+      },
+      "discovery_confirm": {
+        "title": "TVHeadend discovered",
+        "description": "A TVHeadend server was found at {name}. Enter your credentials to finish setup (leave blank for anonymous access). Adjust the port if the web interface does not use the default.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "maxconn": "Stream slots"
+        },
+        "data_description": {
+          "maxconn": "How many concurrent stream entities to expose. You can change this later in the integration options."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check the host and port.",
+      "invalid_auth": "Invalid username or password.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This TVHeadend server is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "TVHeadend options",
+        "data": {
+          "maxconn": "Stream slots"
+        },
+        "data_description": {
+          "maxconn": "How many concurrent stream entities to expose. Changing this reloads the integration."
+        }
+      }
+    }
+  }
+}

@@ -13,6 +13,7 @@ SUB_MINOR_VERSION = 1
 __version__ = '{}.{}.{}'.format(
     MAJOR_VERSION, MINOR_VERSION, SUB_MINOR_VERSION)
 
+SERVERINFO_URL = '/api/serverinfo'
 SUBSCRIPTIONS_URL = '/api/status/subscriptions'
 CHANNELS_URL = '/api/channel/grid?start=0&limit=999999999'
 SERVICES_URL = '/api/mpegts/service/grid?start=0&limit=999999999'
