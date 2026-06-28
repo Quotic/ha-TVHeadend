@@ -69,6 +69,8 @@ async def async_setup_entry(hass, entry):
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         'tvh': tvh,
         'unsubs': unsubs,
+        # currently selected channel for the camera, set by the select entity
+        'selected': {},
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -340,6 +340,27 @@ class TVHeadend(object):
             return []
         return [chan for chan in self.chan_json if chan.get('enabled', True)]
 
+    def stream_url(self, channel_uuid, profile=None):
+        """Build the HTTP stream URL for a channel, embedding auth if set."""
+        url = URL(self.root_url) / 'stream' / 'channel' / channel_uuid
+        if profile:
+            url = url.with_query({'profile': profile})
+        if self.usr:
+            url = url.with_user(self.usr)
+            if self.pwd:
+                url = url.with_password(self.pwd)
+        return str(url)
+
+    async def fetch_image(self, public_url):
+        """Fetch image bytes (e.g. a channel logo) via the auth-aware path."""
+        if not public_url:
+            return None
+        resp = await self._request(
+            'GET', '{}/{}'.format(self.root_url, public_url))
+        if resp is None or resp.status != 200:
+            return None
+        return await resp.read()
+
     async def fetch_epg(self):
         """Fetch the EPG event grid and cache it grouped by channel uuid."""
         result = await self.api_get(self.root_url + EPG_URL,

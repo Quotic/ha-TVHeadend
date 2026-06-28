@@ -15,7 +15,9 @@ try:
 except ImportError:  # pragma: no cover - older cores
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
-from .const import CONF_MAXCONN, DEFAULT_MAXCONN, DEFAULT_PORT, DOMAIN
+from .const import (
+    CONF_MAXCONN, CONF_STREAM_PROFILE, DEFAULT_MAXCONN, DEFAULT_PORT,
+    DEFAULT_STREAM_PROFILE, DOMAIN, STREAM_PROFILES)
 from .pytvheadend.tvheadend import TVHeadend
 
 _LOGGER = logging.getLogger(__name__)
@@ -173,15 +175,19 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current = self.config_entry.options.get(
+        current_maxconn = self.config_entry.options.get(
             CONF_MAXCONN,
             self.config_entry.data.get(CONF_MAXCONN, DEFAULT_MAXCONN),
         )
+        current_profile = self.config_entry.options.get(
+            CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE)
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required(CONF_MAXCONN, default=current):
+                vol.Required(CONF_MAXCONN, default=current_maxconn):
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+                vol.Required(CONF_STREAM_PROFILE, default=current_profile):
+                    vol.In(STREAM_PROFILES),
             }),
         )

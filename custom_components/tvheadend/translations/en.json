@@ -45,10 +45,12 @@
       "init": {
         "title": "TVHeadend options",
         "data": {
-          "maxconn": "Stream slots"
+          "maxconn": "Stream slots",
+          "stream_profile": "Camera stream profile"
         },
         "data_description": {
-          "maxconn": "How many concurrent stream entities to expose. Changing this reloads the integration."
+          "maxconn": "How many concurrent stream entities to expose. Changing this reloads the integration.",
+          "stream_profile": "TVHeadend streaming profile used by the camera. Transcoded profiles (webtv-h264-aac-*) play in the browser with audio; 'pass' is lowest CPU but may not play in the frontend."
         }
       }
     }

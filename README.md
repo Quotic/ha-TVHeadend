@@ -20,6 +20,8 @@ Code is licensed under the MIT license.
   the `tvheadend.service_switch` service.
 - **EPG Now/Next sensors** — one sensor per channel showing the current program,
   with the next program and details in its attributes.
+- **Live TV camera** — a camera entity plus a channel picker (`select`) to watch
+  any channel live in the Home Assistant dashboard and mobile app.
 
 ## Installation
 
@@ -109,6 +111,32 @@ boundaries without extra server load.
 > without guide data) will have a sensor whose state stays *unknown*. Configure
 > EPG grabbers in TVHeadend to populate them, or disable the unwanted sensors in
 > Home Assistant.
+
+## Live TV (camera)
+
+The integration adds a single **camera** entity (`camera.tvheadend`) and a
+**channel picker** (`select.tvheadend_channel`). Choose a channel in the select
+and the camera streams it live; the picture card shows the channel logo until you
+open the live view, so simply having the card on a dashboard does **not** tie up a
+tuner.
+
+> **Each actively viewed stream uses one TVHeadend tuner**, exactly like a normal
+> subscription. You cannot watch more channels at once than you have free tuners.
+
+### Stream profile
+
+The TVHeadend streaming profile used by the camera is selectable in the
+integration's **Configure** (options) screen:
+
+| Profile | Notes |
+|---------|-------|
+| `pass` (default) | Passthrough. Lowest server CPU, full quality. HD channels are H.264 and play through Home Assistant's stream pipeline. Audio is broadcast-native (often AC3) and relies on Home Assistant / go2rtc for browser playback. |
+| `webtv-h264-aac-mpegts` | Transcoded H.264 + AAC. Best browser/audio compatibility, **but requires working H.264 transcoding (libx264) on the server.** |
+| `webtv-h264-aac-matroska` | As above, Matroska container. |
+| `webtv-vp8-vorbis-webm` | Transcoded VP8 + Vorbis; useful with go2rtc / WebRTC. |
+
+> **Note:** Not all servers have working transcoding even when listed. If a
+> transcode profile produces a black/again-failing stream, switch back to `pass`.
 
 ## Credits
 
