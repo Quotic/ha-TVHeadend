@@ -280,9 +280,17 @@ class TVHeadend(object):
             active_streams.append(stream_name)
 
             if stream_name not in self._streams:
+                index = self.next_index()
+                if index is None:
+                    # More active subscriptions than configured stream slots;
+                    # ignore the overflow rather than crash. Increase the
+                    # "stream slots" option to track more concurrent streams.
+                    _LOGGER.warning(
+                        'No free stream slot for %s; increase stream slots '
+                        'to track more concurrent subscriptions.', stream_name)
+                    continue
                 _LOGGER.debug('New stream: %s. Adding to stream list.',
                               stream_name)
-                index = self.next_index()
                 self._streams[stream_name] = index
 
             self._ext_list[self._streams[stream_name]].update_data(channel)
