@@ -6,6 +6,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.switch import SwitchEntity
 
 from .const import DOMAIN, SIGNAL_UPDATE_TVH
+from .entity import tvh_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class TVHSwitch(SwitchEntity):
         self._stream = stream
         self._index = index
         self._attr_unique_id = '{}_switch_{}'.format(entry_id, index)
+        self._attr_device_info = tvh_device_info(entry_id, self._stream.server)
         _LOGGER.debug('Setup new stream switch: %s', self._attr_unique_id)
 
     async def async_added_to_hass(self):

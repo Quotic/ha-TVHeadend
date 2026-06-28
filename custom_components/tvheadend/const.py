@@ -11,6 +11,7 @@ CONF_MAXCONN = "maxconn"
 PLATFORMS = ["sensor", "switch"]
 
 TVH_SCAN_INTERVAL = timedelta(seconds=30)
+EPG_SCAN_INTERVAL = timedelta(minutes=15)
 
 SIGNAL_UPDATE_TVH = "tvh_update"
 

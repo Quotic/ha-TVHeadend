@@ -12,6 +12,7 @@ import hashlib
 import logging
 import os
 import re
+import time
 
 import aiohttp
 from yarl import URL
@@ -20,7 +21,7 @@ from .stream import Stream
 from .constants import (
     DEFAULT_TIMEOUT, DEFAULT_HEADERS, DEFAULT_PORT,
     SUBSCRIPTIONS_URL, CHANNELS_URL, SERVICES_URL, SERVERINFO_URL,
-    __version__)
+    EPG_URL, __version__)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ class TVHeadend(object):
 
         self.chan_json = None
         self.serv_json = None
+
+        # EPG events grouped by channel uuid, each list sorted by start time
+        self._epg = {}
 
         self._streams = {}
         self._active_subscriptions = []
@@ -322,6 +326,63 @@ class TVHeadend(object):
         for chan in self.chan_json:
             if chan['name'] == channel_name:
                 return chan['services']
+
+    # -- Channels & EPG -----------------------------------------------------
+
+    @property
+    def channels(self):
+        """Return the list of enabled channels.
+
+        Each entry is a dict from the channel grid (uuid, name, number,
+        icon_public_url, ...). Requires fetch_channel_list() to have run.
+        """
+        if not self.chan_json:
+            return []
+        return [chan for chan in self.chan_json if chan.get('enabled', True)]
+
+    async def fetch_epg(self):
+        """Fetch the EPG event grid and cache it grouped by channel uuid."""
+        result = await self.api_get(self.root_url + EPG_URL,
+                                    {'start': '0', 'limit': '100000'})
+        if result is None:
+            _LOGGER.error('Unable to fetch EPG.')
+            return
+
+        epg = {}
+        for event in result.get('entries', []):
+            uuid = event.get('channelUuid')
+            if uuid is None:
+                continue
+            epg.setdefault(uuid, []).append(event)
+
+        for events in epg.values():
+            events.sort(key=lambda evt: evt.get('start', 0))
+
+        self._epg = epg
+
+    def epg_now_next(self, channel_uuid):
+        """Return (current, next) EPG events for a channel.
+
+        ``current`` is the event airing now (start <= now <= stop) or None;
+        ``next`` is the earliest event starting after now or None.
+        """
+        events = self._epg.get(channel_uuid)
+        if not events:
+            return None, None
+
+        now = time.time()
+        current = None
+        nxt = None
+        for event in events:
+            start = event.get('start', 0)
+            stop = event.get('stop', 0)
+            if start <= now <= stop:
+                current = event
+            elif start > now:
+                nxt = event
+                break
+
+        return current, nxt
 
     async def _api_call(self, method, url, params=None, data=None):
         """Make an api call and return the decoded body, or None on error."""

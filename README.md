@@ -18,6 +18,8 @@ Code is licensed under the MIT license.
   TVHeadend HTTP API.
 - **Live switching** — change the active service for a stream from the UI or via
   the `tvheadend.service_switch` service.
+- **EPG Now/Next sensors** — one sensor per channel showing the current program,
+  with the next program and details in its attributes.
 
 ## Installation
 
@@ -80,6 +82,33 @@ Change the active service for a given stream index.
 |-------|-------------|---------|
 | `index` | Index of the stream | `1` |
 | `target` | Target service | `SERVICE_1` |
+
+## EPG (Now/Next) sensors
+
+For every **enabled** channel the integration creates one sensor, e.g.
+`sensor.zdf_hd`. Its state is the title of the program **currently airing**, and
+its attributes describe both the current and the next program:
+
+| Attribute | Description |
+|-----------|-------------|
+| `channel` / `channel_number` | Channel name and number |
+| `start` / `end` | Start and end time of the current program |
+| `subtitle` / `description` | Details of the current program |
+| `genre` | Raw DVB genre code(s) of the current program |
+| `next_title` / `next_subtitle` | The next program |
+| `next_start` / `next_end` | Start and end time of the next program |
+
+The channel logo is shown as the sensor's picture when TVHeadend provides one.
+
+EPG data is refreshed from the server every 15 minutes, and the current/next
+program is recomputed locally every 30 seconds so the state advances at program
+boundaries without extra server load.
+
+> **Note:** A channel only shows program information if EPG data exists for it on
+> the server. Channels without an EPG grabber configured (or pay-TV channels
+> without guide data) will have a sensor whose state stays *unknown*. Configure
+> EPG grabbers in TVHeadend to populate them, or disable the unwanted sensors in
+> Home Assistant.
 
 ## Credits
 

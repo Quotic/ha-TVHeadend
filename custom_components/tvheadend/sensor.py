@@ -5,8 +5,10 @@ from homeassistant.const import EVENT_STATE_CHANGED, ATTR_ENTITY_ID
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.sensor import SensorEntity
+import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN, SIGNAL_UPDATE_TVH
+from .entity import tvh_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +26,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for index, stream in enumerate(tvh.stream_list)
     ]
 
+    sensors += [
+        TVHChannelSensor(entry.entry_id, tvh, channel)
+        for channel in tvh.channels
+    ]
+
     async_add_entities(sensors, True)
 
 
@@ -37,6 +44,7 @@ class TVHSensor(SensorEntity):
         self._index = index
         self._state = self._stream.channel_name
         self._attr_unique_id = '{}_sensor_{}'.format(entry_id, index)
+        self._attr_device_info = tvh_device_info(entry_id, self._stream.server)
         _LOGGER.debug('Setup new stream sensor: %s', self._attr_unique_id)
 
         self._input_entity = 'input_select.tv_stream_{}'.format(index)
@@ -147,3 +155,85 @@ class TVHSensor(SensorEntity):
             return inlist
 
         return [first] + [item for item in inlist if item != first]
+
+
+class TVHChannelSensor(SensorEntity):
+    """Now/Next EPG sensor for a single TVHeadend channel."""
+
+    _attr_should_poll = False
+    _attr_icon = 'mdi:television-box'
+
+    def __init__(self, entry_id, tvh, channel):
+        """Initialize a channel EPG sensor."""
+        self._tvh = tvh
+        self._uuid = channel['uuid']
+        self._channel_name = channel.get('name')
+        self._channel_number = channel.get('number')
+        self._icon_url = channel.get('icon_public_url')
+        self._current = None
+        self._next = None
+
+        self._attr_name = self._channel_name
+        self._attr_unique_id = '{}_epg_{}'.format(entry_id, self._uuid)
+        self._attr_device_info = tvh_device_info(entry_id, tvh)
+        _LOGGER.debug('Setup new channel EPG sensor: %s', self._attr_unique_id)
+
+    async def async_added_to_hass(self):
+        """Register update dispatcher."""
+
+        @callback
+        def async_tvh_update():
+            """Update callback."""
+            self.async_schedule_update_ha_state(True)
+
+        async_dispatcher_connect(
+            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update)
+
+    async def async_update(self):
+        """Recompute the current and next programs from the EPG cache."""
+        self._current, self._next = self._tvh.epg_now_next(self._uuid)
+
+    @property
+    def native_value(self):
+        """Return the title of the program currently airing."""
+        if self._current is None:
+            return None
+        return self._current.get('title')
+
+    @property
+    def entity_picture(self):
+        """Return the channel logo URL, if available."""
+        if not self._icon_url:
+            return None
+        return '{}/{}'.format(self._tvh.root_url, self._icon_url)
+
+    @property
+    def extra_state_attributes(self):
+        """Return now/next program details."""
+        attrs = {
+            'channel': self._channel_name,
+            'channel_number': self._channel_number,
+        }
+        if self._current is not None:
+            attrs.update({
+                'start': self._as_datetime(self._current.get('start')),
+                'end': self._as_datetime(self._current.get('stop')),
+                'subtitle': self._current.get('subtitle'),
+                'description': self._current.get('description'),
+                'genre': self._current.get('genre'),
+            })
+        if self._next is not None:
+            attrs.update({
+                'next_title': self._next.get('title'),
+                'next_subtitle': self._next.get('subtitle'),
+                'next_start': self._as_datetime(self._next.get('start')),
+                'next_end': self._as_datetime(self._next.get('stop')),
+            })
+        return attrs
+
+    @staticmethod
+    def _as_datetime(epoch):
+        """Convert an epoch timestamp to an aware datetime, or None."""
+        if not epoch:
+            return None
+        return dt_util.utc_from_timestamp(epoch)

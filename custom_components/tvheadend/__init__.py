@@ -12,8 +12,8 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .const import (
     ATTR_TARGET_INDEX, ATTR_TARGET_SERVICE, CONF_MAXCONN, DEFAULT_MAXCONN,
-    DOMAIN, PLATFORMS, SERVICE_SERVICE_SWITCH, SIGNAL_UPDATE_TVH,
-    TVH_SCAN_INTERVAL)
+    DOMAIN, EPG_SCAN_INTERVAL, PLATFORMS, SERVICE_SERVICE_SWITCH,
+    SIGNAL_UPDATE_TVH, TVH_SCAN_INTERVAL)
 from .pytvheadend.tvheadend import TVHeadend
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,6 +44,11 @@ async def async_setup_entry(hass, entry):
         await tvh.fetch_subscription_list()
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
+    async def async_update_epg(now=None):
+        """Refresh the EPG cache and notify entities."""
+        await tvh.fetch_epg()
+        async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
+
     @callback
     def force_update_tvh_data(msg):
         """Force update of all entities."""
@@ -51,14 +56,19 @@ async def async_setup_entry(hass, entry):
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
     await async_update_tvh_data()
+    await async_update_epg()
     tvh.add_update_callback(force_update_tvh_data)
 
-    unsub = async_track_time_interval(
-        hass, async_update_tvh_data, TVH_SCAN_INTERVAL)
+    unsubs = [
+        async_track_time_interval(
+            hass, async_update_tvh_data, TVH_SCAN_INTERVAL),
+        async_track_time_interval(
+            hass, async_update_epg, EPG_SCAN_INTERVAL),
+    ]
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         'tvh': tvh,
-        'unsub': unsub,
+        'unsubs': unsubs,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -92,7 +102,8 @@ async def async_unload_entry(hass, entry):
 
     if unload_ok:
         data = hass.data[DOMAIN].pop(entry.entry_id)
-        data['unsub']()
+        for unsub in data['unsubs']:
+            unsub()
         await data['tvh'].stop()
 
         if not hass.data[DOMAIN]:
