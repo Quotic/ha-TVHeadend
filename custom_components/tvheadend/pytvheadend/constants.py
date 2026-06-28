@@ -3,12 +3,13 @@ pytvheadend.constants
 ~~~~~~~~~~~~~~~~~~~~
 Constants list
 Copyright (c) 2019 John Mihalic <https://github.com/mezz64>
+Modified by quotic <https://github.com/Quotic>
 Licensed under the MIT license.
 """
 
-MAJOR_VERSION = 1
+MAJOR_VERSION = 0
 MINOR_VERSION = 0
-SUB_MINOR_VERSION = 0
+SUB_MINOR_VERSION = 1
 __version__ = '{}.{}.{}'.format(
     MAJOR_VERSION, MINOR_VERSION, SUB_MINOR_VERSION)
 
