@@ -1,0 +1,11 @@
+{
+    "domain": "tvheadend",
+    "name": "TVHeadend Server",
+    "documentation": "https://github.com/mezz64/pyTVHeadend",
+    "requirements": [],
+    "dependencies": [],
+    "codeowners": ["@mezz64"],
+    "version": "1.0.0",
+    "iot_class": "local_polling",
+    "config_flow": false
+}
