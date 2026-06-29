@@ -16,8 +16,7 @@ except ImportError:  # pragma: no cover - older cores
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
 from .const import (
-    CONF_AUDIO_TRANSCODE, CONF_MAXCONN, CONF_STREAM_PROFILE,
-    DEFAULT_AUDIO_TRANSCODE, DEFAULT_MAXCONN, DEFAULT_PORT,
+    CONF_MAXCONN, CONF_STREAM_PROFILE, DEFAULT_MAXCONN, DEFAULT_PORT,
     DEFAULT_STREAM_PROFILE, DOMAIN, STREAM_PROFILES)
 from .pytvheadend.tvheadend import TVHeadend
 
@@ -178,8 +177,6 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
         )
         current_profile = self.config_entry.options.get(
             CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE)
-        current_transcode = self.config_entry.options.get(
-            CONF_AUDIO_TRANSCODE, DEFAULT_AUDIO_TRANSCODE)
 
         profiles = await self._async_profiles(current_profile)
 
@@ -190,8 +187,6 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
                 vol.Required(CONF_STREAM_PROFILE, default=current_profile):
                     vol.In(profiles),
-                vol.Required(CONF_AUDIO_TRANSCODE, default=current_transcode):
-                    bool,
             }),
         )
 

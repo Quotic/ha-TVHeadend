@@ -8,9 +8,6 @@ DEFAULT_MAXCONN = 2
 
 CONF_MAXCONN = "maxconn"
 CONF_STREAM_PROFILE = "stream_profile"
-CONF_AUDIO_TRANSCODE = "audio_transcode"
-
-DEFAULT_AUDIO_TRANSCODE = False
 
 # 'pass' (H.264 passthrough) works on any server and plays via HA's stream
 # pipeline; transcode profiles require working server-side transcoding.
