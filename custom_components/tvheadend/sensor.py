@@ -1,9 +1,9 @@
 """Support for TVHeadEnd sensors."""
 import logging
 
-from homeassistant.const import EVENT_STATE_CHANGED, ATTR_ENTITY_ID
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.components.sensor import SensorEntity
 import homeassistant.util.dt as dt_util
 
@@ -48,34 +48,31 @@ class TVHSensor(SensorEntity):
         _LOGGER.debug('Setup new stream sensor: %s', self._attr_unique_id)
 
         self._input_entity = 'input_select.tv_stream_{}'.format(index)
-        self.hass.bus.async_listen(
-            EVENT_STATE_CHANGED, self._handle_input_select_updates)
 
     async def _handle_input_select_updates(self, event):
-        """Handle state change updates for input_select."""
-        entity_id = event.data.get(ATTR_ENTITY_ID)
-        if entity_id != self._input_entity:
+        """Act on the linked input_select changing."""
+        new_state = event.data.get('new_state')
+        if new_state is None or new_state.state in (None, 'Inactive'):
             return
 
-        new_state = event.data.get('new_state').state
-        if new_state == "Inactive":
-            return
-
-        if new_state != self._stream.active_service:
+        if new_state.state != self._stream.active_service:
             _LOGGER.debug('Action user-input on: %s to state %s',
-                          entity_id, new_state)
-            await self._stream.change_service(new_state)
+                          self._input_entity, new_state.state)
+            await self._stream.change_service(new_state.state)
 
     async def async_added_to_hass(self):
-        """Register update dispatcher."""
+        """Register update dispatcher and input_select tracking."""
 
         @callback
         def async_tvh_update():
             """Update callback."""
             self.async_schedule_update_ha_state(True)
 
-        async_dispatcher_connect(
-            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update)
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update))
+        self.async_on_remove(async_track_state_change_event(
+            self.hass, [self._input_entity],
+            self._handle_input_select_updates))
 
     @property
     def name(self):
@@ -186,8 +183,8 @@ class TVHChannelSensor(SensorEntity):
             """Update callback."""
             self.async_schedule_update_ha_state(True)
 
-        async_dispatcher_connect(
-            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update)
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update))
 
     async def async_update(self):
         """Recompute the current and next programs from the EPG cache."""

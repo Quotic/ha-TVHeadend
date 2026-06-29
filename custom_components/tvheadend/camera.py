@@ -52,12 +52,10 @@ class TVHCamera(Camera):
     @callback
     def _handle_channel_change(self):
         """Restart the stream when the selected channel changes."""
-        self.hass.async_create_task(self._reset_stream())
-
-    async def _reset_stream(self):
-        """Tear down any running stream so the new channel is picked up."""
+        # Stream.stop() is synchronous (the Camera base calls it the same way);
+        # dropping the cached stream forces a new one with the new source.
         if self.stream is not None:
-            await self.stream.stop()
+            self.stream.stop()
             self.stream = None
         self.async_write_ha_state()
 

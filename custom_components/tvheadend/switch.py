@@ -41,8 +41,8 @@ class TVHSwitch(SwitchEntity):
             """Update callback."""
             self.async_schedule_update_ha_state(True)
 
-        async_dispatcher_connect(
-            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update)
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, SIGNAL_UPDATE_TVH, async_tvh_update))
 
     @property
     def name(self):
