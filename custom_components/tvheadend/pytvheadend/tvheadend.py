@@ -340,14 +340,21 @@ class TVHeadend(object):
 
     @property
     def channels(self):
-        """Return the list of enabled channels.
+        """Return enabled channels ordered by channel number, then name.
 
         Each entry is a dict from the channel grid (uuid, name, number,
-        icon_public_url, ...). Requires fetch_channel_list() to have run.
+        icon_public_url, ...). Channels without a number sort last.
+        Requires fetch_channel_list() to have run.
         """
         if not self.chan_json:
             return []
-        return [chan for chan in self.chan_json if chan.get('enabled', True)]
+        enabled = [chan for chan in self.chan_json
+                   if chan.get('enabled', True)]
+        return sorted(enabled, key=lambda chan: (
+            not chan.get('number'),            # numbered channels first
+            chan.get('number') or 0,           # then ascending by number
+            (chan.get('name') or '').lower(),  # then alphabetically
+        ))
 
     async def fetch_profiles(self):
         """Return the list of available streaming profile names."""
