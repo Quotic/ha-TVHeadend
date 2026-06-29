@@ -16,9 +16,10 @@ except ImportError:  # pragma: no cover - older cores
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
 from .const import (
-    CONF_AUDIO_VIA_GO2RTC, CONF_GO2RTC_URL, CONF_MAXCONN, CONF_STREAM_PROFILE,
-    DEFAULT_AUDIO_VIA_GO2RTC, DEFAULT_GO2RTC_URL, DEFAULT_MAXCONN, DEFAULT_PORT,
-    DEFAULT_STREAM_PROFILE, DOMAIN, STREAM_PROFILES)
+    CONF_AUDIO_VIA_GO2RTC, CONF_GO2RTC_RTSP_PORT, CONF_GO2RTC_URL,
+    CONF_MAXCONN, CONF_STREAM_PROFILE, DEFAULT_AUDIO_VIA_GO2RTC,
+    DEFAULT_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_URL, DEFAULT_MAXCONN,
+    DEFAULT_PORT, DEFAULT_STREAM_PROFILE, DOMAIN, STREAM_PROFILES)
 from .pytvheadend.tvheadend import TVHeadend
 
 _LOGGER = logging.getLogger(__name__)
@@ -182,6 +183,8 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
             CONF_AUDIO_VIA_GO2RTC, DEFAULT_AUDIO_VIA_GO2RTC)
         current_go2rtc_url = self.config_entry.options.get(
             CONF_GO2RTC_URL, DEFAULT_GO2RTC_URL)
+        current_rtsp_port = self.config_entry.options.get(
+            CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
 
         profiles = await self._async_profiles(current_profile)
 
@@ -196,6 +199,8 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
                     bool,
                 vol.Required(CONF_GO2RTC_URL, default=current_go2rtc_url):
                     cv.string,
+                vol.Required(CONF_GO2RTC_RTSP_PORT, default=current_rtsp_port):
+                    cv.port,
             }),
         )
 

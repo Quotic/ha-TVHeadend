@@ -8,9 +8,10 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from . import go2rtc
 from .const import (
-    CONF_AUDIO_VIA_GO2RTC, CONF_GO2RTC_URL, CONF_STREAM_PROFILE,
-    DEFAULT_AUDIO_VIA_GO2RTC, DEFAULT_GO2RTC_URL, DEFAULT_STREAM_PROFILE,
-    DOMAIN, SIGNAL_CHANNEL_SELECTED)
+    CONF_AUDIO_VIA_GO2RTC, CONF_GO2RTC_RTSP_PORT, CONF_GO2RTC_URL,
+    CONF_STREAM_PROFILE, DEFAULT_AUDIO_VIA_GO2RTC, DEFAULT_GO2RTC_RTSP_PORT,
+    DEFAULT_GO2RTC_URL, DEFAULT_STREAM_PROFILE, DOMAIN,
+    SIGNAL_CHANNEL_SELECTED)
 from .entity import tvh_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,9 +81,11 @@ class TVHCamera(Camera):
             name = go2rtc.stream_name(self._entry.entry_id)
             src = 'ffmpeg:{}#video=copy#audio=aac#audio=opus'.format(
                 self._tvh.stream_url(uuid, 'pass'))
+            rtsp_port = options.get(
+                CONF_GO2RTC_RTSP_PORT, DEFAULT_GO2RTC_RTSP_PORT)
             session = async_get_clientsession(self.hass)
             if await go2rtc.ensure_stream(session, api_url, name, src):
-                return go2rtc.rtsp_url(api_url, name)
+                return go2rtc.rtsp_url(api_url, name, rtsp_port)
             _LOGGER.warning(
                 'go2rtc unavailable; falling back to direct stream (no audio).')
 

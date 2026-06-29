@@ -152,10 +152,11 @@ RTSP output — so the camera gains **sound while staying switchable**, with no
 manual YAML.
 
 - Requires go2rtc (default in Home Assistant 2024.11+).
-- **go2rtc API URL** defaults to `http://127.0.0.1:1984` (the built-in go2rtc).
-  Change it only if you run go2rtc elsewhere or on a non-standard port.
+- Defaults target Home Assistant's **managed** go2rtc, whose ports are prefixed
+  with a `1`: **API URL** `http://127.0.0.1:11984` and **RTSP port** `18554`.
+  For a standalone go2rtc / add-on use `…:1984` and `8554`.
 - If go2rtc can't be reached, the camera falls back to the direct stream
-  (video only).
+  (video only) and logs a warning.
 
 ## Credits
 

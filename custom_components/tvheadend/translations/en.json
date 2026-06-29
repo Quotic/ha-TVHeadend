@@ -48,13 +48,15 @@
           "maxconn": "Stream slots",
           "stream_profile": "Camera stream profile",
           "audio_via_go2rtc": "Audio via go2rtc",
-          "go2rtc_url": "go2rtc API URL"
+          "go2rtc_url": "go2rtc API URL",
+          "go2rtc_rtsp_port": "go2rtc RTSP port"
         },
         "data_description": {
           "maxconn": "How many concurrent stream entities to expose. Changing this reloads the integration.",
           "stream_profile": "TVHeadend streaming profile used by the camera. Ignored when 'Audio via go2rtc' is enabled.",
           "audio_via_go2rtc": "Let go2rtc copy the video and transcode the audio (AAC/Opus) for the selected channel, so the camera has sound. Requires go2rtc (bundled with HA 2024.11+).",
-          "go2rtc_url": "Base URL of the go2rtc API. Leave as http://127.0.0.1:1984 for the built-in go2rtc."
+          "go2rtc_url": "Base URL of the go2rtc API. Default http://127.0.0.1:11984 is Home Assistant's managed go2rtc (ports are prefixed with 1). Use port 1984 for a standalone go2rtc/add-on.",
+          "go2rtc_rtsp_port": "go2rtc RTSP port. Default 18554 is HA's managed go2rtc; use 8554 for a standalone go2rtc/add-on."
         }
       }
     }

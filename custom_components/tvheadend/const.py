@@ -10,9 +10,13 @@ CONF_MAXCONN = "maxconn"
 CONF_STREAM_PROFILE = "stream_profile"
 CONF_AUDIO_VIA_GO2RTC = "audio_via_go2rtc"
 CONF_GO2RTC_URL = "go2rtc_url"
+CONF_GO2RTC_RTSP_PORT = "go2rtc_rtsp_port"
 
 DEFAULT_AUDIO_VIA_GO2RTC = False
-DEFAULT_GO2RTC_URL = "http://127.0.0.1:1984"
+# Home Assistant's managed go2rtc prefixes every port with a 1
+# (API 1984 -> 11984, RTSP 8554 -> 18554) to avoid conflicts.
+DEFAULT_GO2RTC_URL = "http://127.0.0.1:11984"
+DEFAULT_GO2RTC_RTSP_PORT = 18554
 
 # 'pass' (H.264 passthrough) works on any server and plays via HA's stream
 # pipeline; transcode profiles require working server-side transcoding.

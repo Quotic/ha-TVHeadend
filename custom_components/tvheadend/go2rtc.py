@@ -11,18 +11,16 @@ from yarl import URL
 
 _LOGGER = logging.getLogger(__name__)
 
-RTSP_PORT = 8554
-
 
 def stream_name(entry_id):
     """Return the go2rtc stream name used for a config entry."""
     return 'tvheadend_{}'.format(entry_id)
 
 
-def rtsp_url(api_url, name):
-    """Return the go2rtc RTSP URL for a stream, derived from the API URL host."""
+def rtsp_url(api_url, name, rtsp_port):
+    """Return the go2rtc RTSP URL for a stream, using the API URL host."""
     host = URL(api_url).host or '127.0.0.1'
-    return 'rtsp://{}:{}/{}'.format(host, RTSP_PORT, name)
+    return 'rtsp://{}:{}/{}'.format(host, rtsp_port, name)
 
 
 async def ensure_stream(session, api_url, name, src):
