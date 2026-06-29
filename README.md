@@ -144,20 +144,18 @@ Broadcast audio is usually AC3, which browsers can't play and Home Assistant's
 stream pipeline strips out — so `pass` often gives **video but no sound**, and
 many TVHeadend builds can't transcode reliably either.
 
-The reliable fix is to let **go2rtc** (bundled with Home Assistant) copy the
-video and transcode the audio. Add a stream to `go2rtc.yaml`:
+Enable **"Audio via go2rtc"** in the integration's **Configure** options. The
+integration then drives **go2rtc** (bundled with Home Assistant) automatically:
+for whichever channel you pick, it defines a go2rtc stream that copies the video
+and transcodes only the audio to AAC/Opus, and points the camera at go2rtc's
+RTSP output — so the camera gains **sound while staying switchable**, with no
+manual YAML.
 
-```yaml
-streams:
-  tvheadend_zdf:
-    - ffmpeg:http://USER:PASS@HOST:9981/stream/channel/CHANNEL_UUID?profile=pass#video=copy#audio=aac#audio=opus
-```
-
-Then view it with the [WebRTC Camera](https://github.com/AlexxIT/WebRTC) card
-(`url: tvheadend_zdf`). This uses the rock-solid `pass` stream and HA's own
-ffmpeg, so it works regardless of TVHeadend's transcoding support. A go2rtc
-stream is defined per channel, so this is best for a few favourite channels
-rather than the switchable picker.
+- Requires go2rtc (default in Home Assistant 2024.11+).
+- **go2rtc API URL** defaults to `http://127.0.0.1:1984` (the built-in go2rtc).
+  Change it only if you run go2rtc elsewhere or on a non-standard port.
+- If go2rtc can't be reached, the camera falls back to the direct stream
+  (video only).
 
 ## Credits
 

@@ -8,6 +8,11 @@ DEFAULT_MAXCONN = 2
 
 CONF_MAXCONN = "maxconn"
 CONF_STREAM_PROFILE = "stream_profile"
+CONF_AUDIO_VIA_GO2RTC = "audio_via_go2rtc"
+CONF_GO2RTC_URL = "go2rtc_url"
+
+DEFAULT_AUDIO_VIA_GO2RTC = False
+DEFAULT_GO2RTC_URL = "http://127.0.0.1:1984"
 
 # 'pass' (H.264 passthrough) works on any server and plays via HA's stream
 # pipeline; transcode profiles require working server-side transcoding.

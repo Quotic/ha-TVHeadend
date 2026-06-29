@@ -16,7 +16,8 @@ except ImportError:  # pragma: no cover - older cores
     from homeassistant.components.zeroconf import ZeroconfServiceInfo
 
 from .const import (
-    CONF_MAXCONN, CONF_STREAM_PROFILE, DEFAULT_MAXCONN, DEFAULT_PORT,
+    CONF_AUDIO_VIA_GO2RTC, CONF_GO2RTC_URL, CONF_MAXCONN, CONF_STREAM_PROFILE,
+    DEFAULT_AUDIO_VIA_GO2RTC, DEFAULT_GO2RTC_URL, DEFAULT_MAXCONN, DEFAULT_PORT,
     DEFAULT_STREAM_PROFILE, DOMAIN, STREAM_PROFILES)
 from .pytvheadend.tvheadend import TVHeadend
 
@@ -177,6 +178,10 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
         )
         current_profile = self.config_entry.options.get(
             CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE)
+        current_go2rtc = self.config_entry.options.get(
+            CONF_AUDIO_VIA_GO2RTC, DEFAULT_AUDIO_VIA_GO2RTC)
+        current_go2rtc_url = self.config_entry.options.get(
+            CONF_GO2RTC_URL, DEFAULT_GO2RTC_URL)
 
         profiles = await self._async_profiles(current_profile)
 
@@ -187,6 +192,10 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
                 vol.Required(CONF_STREAM_PROFILE, default=current_profile):
                     vol.In(profiles),
+                vol.Required(CONF_AUDIO_VIA_GO2RTC, default=current_go2rtc):
+                    bool,
+                vol.Required(CONF_GO2RTC_URL, default=current_go2rtc_url):
+                    cv.string,
             }),
         )
 
