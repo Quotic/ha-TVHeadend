@@ -138,6 +138,19 @@ integration's **Configure** (options) screen:
 > **Note:** Not all servers have working transcoding even when listed. If a
 > transcode profile produces a black/again-failing stream, switch back to `pass`.
 
+### Getting audio (recommended)
+
+Broadcast audio is usually AC3, which browsers can't play and Home Assistant's
+stream pipeline strips out — so `pass` often gives **video but no sound**, and
+many TVHeadend builds can't transcode reliably either.
+
+The robust fix is to let **Home Assistant** do it: enable
+**"Transcode audio in Home Assistant (go2rtc)"** in the options. The camera then
+streams the clean `pass` feed wrapped in a go2rtc `ffmpeg:` source that copies
+the video and transcodes only the audio to AAC/Opus — using HA's own ffmpeg, so
+it works regardless of what TVHeadend can transcode, and it still follows the
+channel picker. Requires go2rtc (bundled with Home Assistant 2024.11+).
+
 ## Credits
 
 Originally created by [John Mihalic (mezz64)](https://github.com/mezz64).

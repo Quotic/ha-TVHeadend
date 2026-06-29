@@ -6,8 +6,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
-    CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE, DOMAIN,
-    SIGNAL_CHANNEL_SELECTED)
+    CONF_AUDIO_TRANSCODE, CONF_STREAM_PROFILE, DEFAULT_AUDIO_TRANSCODE,
+    DEFAULT_STREAM_PROFILE, DOMAIN, SIGNAL_CHANNEL_SELECTED)
 from .entity import tvh_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,10 +60,22 @@ class TVHCamera(Camera):
         self.async_write_ha_state()
 
     async def stream_source(self):
-        """Return the TVHeadend stream URL for the selected channel."""
+        """Return the stream source for the selected channel.
+
+        With audio transcoding enabled, the clean 'pass' stream is wrapped in a
+        go2rtc ffmpeg source so Home Assistant copies the video and transcodes
+        the (AC3) audio to browser-friendly AAC/Opus — without relying on
+        TVHeadend's own transcoding.
+        """
         uuid = self._selected.get('uuid')
         if not uuid:
             return None
+
+        if self._entry.options.get(
+                CONF_AUDIO_TRANSCODE, DEFAULT_AUDIO_TRANSCODE):
+            url = self._tvh.stream_url(uuid, 'pass')
+            return 'ffmpeg:{}#video=copy#audio=aac#audio=opus'.format(url)
+
         profile = self._entry.options.get(
             CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE)
         return self._tvh.stream_url(uuid, profile)
