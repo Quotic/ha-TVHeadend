@@ -53,8 +53,9 @@ class TVHeadend(object):
         self.chan_json = None
         self.serv_json = None
 
-        # EPG events grouped by channel uuid, each list sorted by start time
-        self._epg = {}
+        # Raw EPG event grid, cached briefly for on-demand queries
+        self._epg_raw = []
+        self._epg_fetched = 0
 
         self._streams = {}
         self._active_subscriptions = []
@@ -376,49 +377,41 @@ class TVHeadend(object):
             return None
         return await resp.read()
 
-    async def fetch_epg(self):
-        """Fetch the EPG event grid and cache it grouped by channel uuid."""
+    async def _ensure_epg(self, max_age=300):
+        """Refresh the raw EPG grid cache if it is older than max_age seconds."""
+        if self._epg_raw and (time.time() - self._epg_fetched) < max_age:
+            return
         result = await self.api_get(self.root_url + EPG_URL,
                                     {'start': '0', 'limit': '100000'})
         if result is None:
             _LOGGER.error('Unable to fetch EPG.')
             return
+        self._epg_raw = result.get('entries', [])
+        self._epg_fetched = time.time()
 
-        epg = {}
-        for event in result.get('entries', []):
-            uuid = event.get('channelUuid')
-            if uuid is None:
-                continue
-            epg.setdefault(uuid, []).append(event)
+    async def get_epg(self, channel=None, start=None, stop=None):
+        """Return EPG events, optionally filtered by channel and time window.
 
-        for events in epg.values():
-            events.sort(key=lambda evt: evt.get('start', 0))
-
-        self._epg = epg
-
-    def epg_now_next(self, channel_uuid):
-        """Return (current, next) EPG events for a channel.
-
-        ``current`` is the event airing now (start <= now <= stop) or None;
-        ``next`` is the earliest event starting after now or None.
+        ``channel`` matches a channel name (case-insensitive) or uuid.
+        ``start``/``stop`` are epoch seconds bounding the window; events that
+        overlap the window are returned, sorted by start time.
         """
-        events = self._epg.get(channel_uuid)
-        if not events:
-            return None, None
+        await self._ensure_epg()
 
-        now = time.time()
-        current = None
-        nxt = None
-        for event in events:
-            start = event.get('start', 0)
-            stop = event.get('stop', 0)
-            if start <= now <= stop:
-                current = event
-            elif start > now:
-                nxt = event
-                break
+        events = self._epg_raw
+        if channel:
+            needle = channel.lower()
+            events = [
+                evt for evt in events
+                if evt.get('channelUuid') == channel
+                or (evt.get('channelName') or '').lower() == needle
+            ]
+        if start is not None:
+            events = [evt for evt in events if evt.get('stop', 0) >= start]
+        if stop is not None:
+            events = [evt for evt in events if evt.get('start', 0) <= stop]
 
-        return current, nxt
+        return sorted(events, key=lambda evt: evt.get('start', 0))
 
     async def _api_call(self, method, url, params=None, data=None):
         """Make an api call and return the decoded body, or None on error."""

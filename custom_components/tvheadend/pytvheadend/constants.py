@@ -8,8 +8,8 @@ Licensed under the MIT license.
 """
 
 MAJOR_VERSION = 0
-MINOR_VERSION = 3
-SUB_MINOR_VERSION = 2
+MINOR_VERSION = 4
+SUB_MINOR_VERSION = 0
 __version__ = '{}.{}.{}'.format(
     MAJOR_VERSION, MINOR_VERSION, SUB_MINOR_VERSION)
 

@@ -18,8 +18,9 @@ Code is licensed under the MIT license.
   TVHeadend HTTP API.
 - **Live switching** — change the active service for a stream from the UI or via
   the `tvheadend.service_switch` service.
-- **EPG Now/Next sensors** — one sensor per channel showing the current program,
-  with the next program and details in its attributes.
+- **EPG service** — `tvheadend.get_epg` returns the programme guide as response
+  data (filterable by channel and time window) for scripts, templates and cards,
+  without creating dozens of entities.
 - **Live TV camera** — a camera entity plus a channel picker (`select`) to watch
   any channel live in the Home Assistant dashboard and mobile app.
 
@@ -85,32 +86,31 @@ Change the active service for a given stream index.
 | `index` | Index of the stream | `1` |
 | `target` | Target service | `SERVICE_1` |
 
-## EPG (Now/Next) sensors
+### `tvheadend.get_epg`
 
-For every **enabled** channel the integration creates one sensor, e.g.
-`sensor.zdf_hd`. Its state is the title of the program **currently airing**, and
-its attributes describe both the current and the next program:
+Return the programme guide as **response data** — no EPG entities are created.
 
-| Attribute | Description |
-|-----------|-------------|
-| `channel` / `channel_number` | Channel name and number |
-| `start` / `end` | Start and end time of the current program |
-| `subtitle` / `description` | Details of the current program |
-| `genre` | Raw DVB genre code(s) of the current program |
-| `next_title` / `next_subtitle` | The next program |
-| `next_start` / `next_end` | Start and end time of the next program |
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `channel` | no | — | Channel name (or UUID). Omit for all channels. |
+| `hours` | no | `6` | How many hours ahead to include (1–168). |
 
-The channel logo is shown as the sensor's picture when TVHeadend provides one.
+Each event in the response has `channel`, `channel_number`, `title`, `subtitle`,
+`description`, `start`, `end` (ISO 8601) and `genre`.
 
-EPG data is refreshed from the server every 15 minutes, and the current/next
-program is recomputed locally every 30 seconds so the state advances at program
-boundaries without extra server load.
+Example — show the next 6 hours for one channel:
 
-> **Note:** A channel only shows program information if EPG data exists for it on
-> the server. Channels without an EPG grabber configured (or pay-TV channels
-> without guide data) will have a sensor whose state stays *unknown*. Configure
-> EPG grabbers in TVHeadend to populate them, or disable the unwanted sensors in
-> Home Assistant.
+```yaml
+action: tvheadend.get_epg
+data:
+  channel: ZDF HD
+  hours: 6
+response_variable: epg
+```
+
+`epg.events` then holds the list, ready to use in a template, a script, or a
+custom card. (Only channels that actually have guide data on the server return
+events; configure EPG grabbers in TVHeadend to populate more.)
 
 ## Live TV (camera)
 

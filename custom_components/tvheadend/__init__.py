@@ -1,19 +1,22 @@
 """Support for TVHeadend."""
 import logging
+import time
 
 import voluptuous as vol
 
 from homeassistant.const import (
     CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME)
-from homeassistant.core import callback
+from homeassistant.core import SupportsResponse, callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
+import homeassistant.util.dt as dt_util
 
 from .const import (
-    ATTR_TARGET_INDEX, ATTR_TARGET_SERVICE, CONF_MAXCONN, DEFAULT_MAXCONN,
-    DOMAIN, EPG_SCAN_INTERVAL, PLATFORMS, SERVICE_SERVICE_SWITCH,
-    SIGNAL_UPDATE_TVH, TVH_SCAN_INTERVAL)
+    ATTR_CHANNEL, ATTR_HOURS, ATTR_TARGET_INDEX, ATTR_TARGET_SERVICE,
+    CONF_MAXCONN, DEFAULT_EPG_HOURS, DEFAULT_MAXCONN, DOMAIN, PLATFORMS,
+    SERVICE_GET_EPG, SERVICE_SERVICE_SWITCH, SIGNAL_UPDATE_TVH,
+    TVH_SCAN_INTERVAL)
 from .pytvheadend.tvheadend import TVHeadend
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +25,29 @@ SERVICE_TVH_SCHEMA = vol.Schema({
     vol.Required(ATTR_TARGET_INDEX): cv.string,
     vol.Required(ATTR_TARGET_SERVICE): cv.string,
 })
+
+GET_EPG_SCHEMA = vol.Schema({
+    vol.Optional(ATTR_CHANNEL): cv.string,
+    vol.Optional(ATTR_HOURS, default=DEFAULT_EPG_HOURS):
+        vol.All(vol.Coerce(int), vol.Range(min=1, max=168)),
+})
+
+
+def _format_event(event):
+    """Shape a raw EPG event for the service response."""
+    def iso(epoch):
+        return dt_util.utc_from_timestamp(epoch).isoformat() if epoch else None
+
+    return {
+        'channel': event.get('channelName'),
+        'channel_number': event.get('channelNumber'),
+        'title': event.get('title'),
+        'subtitle': event.get('subtitle'),
+        'description': event.get('description'),
+        'start': iso(event.get('start')),
+        'end': iso(event.get('stop')),
+        'genre': event.get('genre'),
+    }
 
 
 async def async_setup_entry(hass, entry):
@@ -44,11 +70,6 @@ async def async_setup_entry(hass, entry):
         await tvh.fetch_subscription_list()
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
-    async def async_update_epg(now=None):
-        """Refresh the EPG cache and notify entities."""
-        await tvh.fetch_epg()
-        async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
-
     @callback
     def force_update_tvh_data(msg):
         """Force update of all entities."""
@@ -56,14 +77,11 @@ async def async_setup_entry(hass, entry):
         async_dispatcher_send(hass, SIGNAL_UPDATE_TVH)
 
     await async_update_tvh_data()
-    await async_update_epg()
     tvh.add_update_callback(force_update_tvh_data)
 
     unsubs = [
         async_track_time_interval(
             hass, async_update_tvh_data, TVH_SCAN_INTERVAL),
-        async_track_time_interval(
-            hass, async_update_epg, EPG_SCAN_INTERVAL),
     ]
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
@@ -86,6 +104,21 @@ async def async_setup_entry(hass, entry):
         hass.services.async_register(
             DOMAIN, SERVICE_SERVICE_SWITCH, async_service_handler,
             schema=SERVICE_TVH_SCHEMA)
+
+    if not hass.services.has_service(DOMAIN, SERVICE_GET_EPG):
+        async def async_get_epg(service):
+            """Return EPG events for a channel/time window as response data."""
+            data = next(iter(hass.data[DOMAIN].values()))
+            channel = service.data.get(ATTR_CHANNEL)
+            hours = service.data.get(ATTR_HOURS, DEFAULT_EPG_HOURS)
+            now = time.time()
+            events = await data['tvh'].get_epg(
+                channel=channel, start=now, stop=now + hours * 3600)
+            return {'events': [_format_event(event) for event in events]}
+
+        hass.services.async_register(
+            DOMAIN, SERVICE_GET_EPG, async_get_epg,
+            schema=GET_EPG_SCHEMA, supports_response=SupportsResponse.ONLY)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
@@ -110,5 +143,6 @@ async def async_unload_entry(hass, entry):
 
         if not hass.data[DOMAIN]:
             hass.services.async_remove(DOMAIN, SERVICE_SERVICE_SWITCH)
+            hass.services.async_remove(DOMAIN, SERVICE_GET_EPG)
 
     return unload_ok

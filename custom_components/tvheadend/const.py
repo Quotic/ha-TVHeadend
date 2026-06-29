@@ -22,7 +22,6 @@ STREAM_PROFILES = [
 PLATFORMS = ["camera", "select", "sensor", "switch"]
 
 TVH_SCAN_INTERVAL = timedelta(seconds=30)
-EPG_SCAN_INTERVAL = timedelta(minutes=15)
 
 SIGNAL_UPDATE_TVH = "tvh_update"
 SIGNAL_CHANNEL_SELECTED = "tvh_channel_selected_{}"
@@ -30,3 +29,8 @@ SIGNAL_CHANNEL_SELECTED = "tvh_channel_selected_{}"
 SERVICE_SERVICE_SWITCH = "service_switch"
 ATTR_TARGET_INDEX = "index"
 ATTR_TARGET_SERVICE = "target"
+
+SERVICE_GET_EPG = "get_epg"
+ATTR_CHANNEL = "channel"
+ATTR_HOURS = "hours"
+DEFAULT_EPG_HOURS = 6
