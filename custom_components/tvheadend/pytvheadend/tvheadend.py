@@ -21,7 +21,7 @@ from .stream import Stream
 from .constants import (
     DEFAULT_TIMEOUT, DEFAULT_HEADERS, DEFAULT_PORT,
     SUBSCRIPTIONS_URL, CHANNELS_URL, SERVICES_URL, SERVERINFO_URL,
-    EPG_URL, __version__)
+    EPG_URL, PROFILES_URL, __version__)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -347,6 +347,13 @@ class TVHeadend(object):
         if not self.chan_json:
             return []
         return [chan for chan in self.chan_json if chan.get('enabled', True)]
+
+    async def fetch_profiles(self):
+        """Return the list of available streaming profile names."""
+        result = await self.api_get(self.root_url + PROFILES_URL)
+        if result is None:
+            return []
+        return [p['val'] for p in result.get('entries', []) if p.get('val')]
 
     def stream_url(self, channel_uuid, profile=None):
         """Build the HTTP stream URL for a channel, embedding auth if set."""

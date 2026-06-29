@@ -182,12 +182,34 @@ class TVHeadendOptionsFlow(config_entries.OptionsFlow):
         current_profile = self.config_entry.options.get(
             CONF_STREAM_PROFILE, DEFAULT_STREAM_PROFILE)
 
+        profiles = await self._async_profiles(current_profile)
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Required(CONF_MAXCONN, default=current_maxconn):
                     vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
                 vol.Required(CONF_STREAM_PROFILE, default=current_profile):
-                    vol.In(STREAM_PROFILES),
+                    vol.In(profiles),
             }),
         )
+
+    async def _async_profiles(self, current_profile):
+        """Return selectable stream profiles from the live server.
+
+        Falls back to the built-in list if the server can't be queried, and
+        always keeps the currently configured profile selectable.
+        """
+        profiles = list(STREAM_PROFILES)
+        data = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if data:
+            try:
+                fetched = await data['tvh'].fetch_profiles()
+                if fetched:
+                    profiles = fetched
+            except Exception:  # pragma: no cover - defensive
+                _LOGGER.debug('Could not fetch stream profiles from server.')
+
+        if current_profile not in profiles:
+            profiles = [current_profile] + profiles
+        return profiles
